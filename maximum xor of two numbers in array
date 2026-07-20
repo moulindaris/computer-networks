@@ -1,0 +1,13 @@
+class Solution:
+    def findMaximumXOR(self, nums: list[int]) -> int:
+        max_xor = 0
+        mask = 0
+        for i in range(30, -1, -1):
+            mask |= (1 << i)
+            prefixes = {num & mask for num in nums}
+            temp_max = max_xor | (1 << i)
+            for p in prefixes:
+                if (p ^ temp_max) in prefixes:
+                    max_xor = temp_max
+                    break
+        return max_xor
