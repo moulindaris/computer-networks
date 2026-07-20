@@ -1,0 +1,19 @@
+def sort_by_frequency(s: str) -> str:
+    freq = {}
+    for char in s:
+        if char in freq:
+            freq[char] += 1
+        else:
+            freq[char] = 1
+            
+    unique_chars = list(freq.keys())
+    unique_chars.sort(key=lambda x: (-freq[x], not ('a' <= x <= 'z'), ord(x)))
+    
+    res = []
+    for char in unique_chars:
+        res.append(char * freq[char])
+        
+    return "".join(res)
+
+s = input().strip()
+print(sort_by_frequency(s))
