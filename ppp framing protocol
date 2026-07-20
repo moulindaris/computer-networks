@@ -1,0 +1,142 @@
+#include <stdio.h>
+#include <string.h>
+
+#define FLAG 0x7E
+#define ESCAPE 0x7D
+#define STUFF_FLAG 0x5E
+#define STUFF_ESCAPE 0x5D
+
+unsigned short get_crc16(unsigned char *data, int len) {
+    unsigned short crc = 0xFFFF;
+    int i, j;
+    for (i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (j = 0; j < 8; j++) {
+            if (crc & 1) {
+                crc = (crc >> 1) ^ 0x8408;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    return ~crc;
+}
+
+int encode_ppp(unsigned char *payload, int p_len, unsigned char *frame) {
+    unsigned char raw[1000];
+    unsigned short fcs;
+    int r_len = 0;
+    int f_idx = 0;
+    int i;
+
+    raw[r_len++] = 0xFF;
+    raw[r_len++] = 0x03;
+    raw[r_len++] = 0x00;
+    raw[r_len++] = 0x21;
+
+    for (i = 0; i < p_len; i++) {
+        raw[r_len++] = payload[i];
+    }
+
+    fcs = get_crc16(raw, r_len);
+    raw[r_len++] = fcs & 0xFF;
+    raw[r_len++] = (fcs >> 8) & 0xFF;
+
+    frame[f_idx++] = FLAG;
+    for (i = 0; i < r_len; i++) {
+        if (raw[i] == FLAG) {
+            frame[f_idx++] = ESCAPE;
+            frame[f_idx++] = STUFF_FLAG;
+        } else if (raw[i] == ESCAPE) {
+            frame[f_idx++] = ESCAPE;
+            frame[f_idx++] = STUFF_ESCAPE;
+        } else {
+            frame[f_idx++] = raw[i];
+        }
+    }
+    frame[f_idx++] = FLAG;
+
+    return f_idx;
+}
+
+int decode_ppp(unsigned char *frame, int f_len, unsigned char *payload_out) {
+    unsigned char raw[1000];
+    unsigned short c_fcs, r_fcs;
+    int r_len = 0;
+    int i;
+
+    if (f_len < 8 || frame[0] != FLAG || frame[f_len - 1] != FLAG) {
+        return -1;
+    }
+
+    for (i = 1; i < f_len - 1; i++) {
+        if (frame[i] == ESCAPE) {
+            i++;
+            if (frame[i] == STUFF_FLAG) {
+                raw[r_len++] = FLAG;
+            } else if (frame[i] == STUFF_ESCAPE) {
+                raw[r_len++] = ESCAPE;
+            } else {
+                return -1;
+            }
+        } else {
+            raw[r_len++] = frame[i];
+        }
+    }
+
+    c_fcs = get_crc16(raw, r_len - 2);
+    r_fcs = raw[r_len - 2] | (raw[r_len - 1] << 8);
+
+    if (c_fcs != r_fcs) {
+        return -1;
+    }
+
+    for (i = 4; i < r_len - 2; i++) {
+        payload_out[i - 4] = raw[i];
+    }
+
+    return r_len - 6;
+}
+
+int main() {
+    char input_str[256];
+    unsigned char original[256];
+    unsigned char tx_frame[2000];
+    unsigned char rx_data[256];
+    int orig_len = 0;
+    int tx_len, rx_len, i;
+
+    printf("Enter string data to transmit: ");
+    if (scanf("%255s", input_str) != 1) {
+        return 1;
+    }
+
+    orig_len = strlen(input_str);
+    for (i = 0; i < orig_len; i++) {
+        original[i] = (unsigned char)input_str[i];
+    }
+
+    printf("\nOriginal Data (Hex): ");
+    for (i = 0; i < orig_len; i++) {
+        printf("%02X ", original[i]);
+    }
+    printf("\n");
+
+    tx_len = encode_ppp(original, orig_len, tx_frame);
+    printf("Encoded PPP Frame  : ");
+    for (i = 0; i < tx_len; i++) {
+        printf("%02X ", tx_frame[i]);
+    }
+    printf("\n");
+
+    rx_len = decode_ppp(tx_frame, tx_len, rx_data);
+    if (rx_len >= 0) {
+        rx_data[rx_len] = '\0';
+        printf("Decoded String     : %s\n", rx_data);
+        printf("Verification       : Success\n");
+    } else {
+        printf("Verification       : Failure\n");
+    }
+
+    return 0;
+}
