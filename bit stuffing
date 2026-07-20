@@ -1,0 +1,171 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+int calculate_parity(const char *bits) {
+    int count = 0;
+    int i;
+    for (i = 0; bits[i] != '\0'; i++) {
+        if (bits[i] == '1') {
+            count++;
+        }
+    }
+    return count % 2;
+}
+
+void to_bits(const char *str, char *output) {
+    int i, j;
+    int k = 0;
+    for (i = 0; str[i] != '\0'; i++) {
+        int val = (int)str[i];
+        char temp[8];
+        for (j = 7; j >= 0; j--) {
+            temp[j] = (val % 2 == 1) ? '1' : '0';
+            val = val / 2;
+        }
+        for (j = 0; j < 8; j++) {
+            output[k++] = temp[j];
+        }
+    }
+    output[k] = '\0';
+}
+
+void to_str(const char *bits, char *output) {
+    int i, j;
+    int k = 0;
+    int len = strlen(bits);
+    for (i = 0; i < len; i += 8) {
+        int val = 0;
+        int power = 1;
+        for (j = 7; j >= 0; j--) {
+            if (i + j < len) {
+                if (bits[i + j] == '1') {
+                    val += power;
+                }
+            }
+            power *= 2;
+        }
+        output[k++] = (char)val;
+    }
+    output[k] = '\0';
+}
+
+void do_stuff(const char *in, char *out) {
+    int count = 0;
+    int j = 0;
+    int i;
+    for (i = 0; in[i] != '\0'; i++) {
+        out[j++] = in[i];
+        if (in[i] == '1') {
+            count++;
+            if (count == 5) {
+                out[j++] = '0';
+                count = 0;
+            }
+        } else {
+            count = 0;
+        }
+    }
+    out[j] = '\0';
+}
+
+void do_destuff(const char *in, char *out) {
+    int count = 0;
+    int j = 0;
+    int i;
+    for (i = 0; in[i] != '\0'; i++) {
+        out[j++] = in[i];
+        if (in[i] == '1') {
+            count++;
+        } else {
+            if (count == 5) {
+                j--;
+            }
+            count = 0;
+        }
+    }
+    out[j] = '\0';
+}
+
+void add_errors(const char *src, char *dst, int n) {
+    int len = strlen(src);
+    int i, idx;
+    strcpy(dst, src);
+    if (n <= 0 || len == 0) return;
+    for (i = 0; i < n; i++) {
+        idx = rand() % len;
+        dst[idx] = (dst[idx] == '1') ? '0' : '1';
+    }
+}
+
+int main() {
+    char data[100];
+    char b_stream[800];
+    char frame[900];
+    char tx_frame[1200];
+    char rx_frame[1200];
+    char rx_payload[1200];
+    char clean_bits[900];
+    char out_str[100];
+    int tx_parity, rx_parity, exp_parity;
+    int ch, errs, len;
+
+    srand((unsigned int)time(NULL));
+
+    printf("Enter string data: ");
+    scanf("%99s", data);
+
+    printf("\n--- TRANSMITTER ---\n");
+    to_bits(data, b_stream);
+    printf("Binary Data : %s\n", b_stream);
+
+    tx_parity = calculate_parity(b_stream);
+    printf("Parity Bit  : %d\n", tx_parity);
+
+    sprintf(frame, "%s%d", b_stream, tx_parity);
+    do_stuff(frame, tx_frame);
+    printf("Stuffed Frame: %s\n", tx_frame);
+
+    printf("\n--- CHANNEL SIMULATION ---\n");
+    printf("1. No Errors\n2. Single-Bit Error\n3. Multiple-Bit Errors\nChoice: ");
+    scanf("%d", &ch);
+
+    if (ch == 1) errs = 0;
+    else if (ch == 2) errs = 1;
+    else {
+        printf("Enter count: ");
+        scanf("%d", &errs);
+    }
+
+    add_errors(tx_frame, rx_frame, errs);
+    printf("Received Frame: %s\n", rx_frame);
+
+    printf("\n--- RECEIVER ---\n");
+    do_destuff(rx_frame, rx_payload);
+    printf("De-stuffed Bits: %s\n", rx_payload);
+
+    len = strlen(rx_payload);
+    if (len >= 1) {
+        strncpy(clean_bits, rx_payload, len - 1);
+        clean_bits[len - 1] = '\0';
+        exp_parity = rx_payload[len - 1] - '0';
+        
+        rx_parity = calculate_parity(clean_bits);
+        to_str(clean_bits, out_str);
+
+        printf("Extracted Payload: %s\n", clean_bits);
+        printf("Output Text      : %s\n", out_str);
+        printf("Parity Check     : Expected %d, Got %d\n", exp_parity, rx_parity);
+
+        if (rx_parity == exp_parity && strcmp(b_stream, clean_bits) == 0) {
+            printf("STATUS           : SUCCESS (Data is correct)\n");
+        } else {
+            printf("STATUS           : ERROR DETECTED (Data corrupted)\n");
+        }
+    } else {
+        printf("STATUS           : INVALID FRAME RECEIVED\n");
+    }
+
+    return 0;
+}
