@@ -1,0 +1,12 @@
+int findComplement(int num) {
+    int ans = 0;
+    long long p = 1; 
+    while (num > 0) {
+        int c_bit = num % 2;
+        int f_bit = 1 - c_bit;
+        ans = ans + (f_bit * p);
+        p = p * 2;
+        num = num / 2;
+    }
+    return ans;
+}
